@@ -43,8 +43,8 @@ def welcome():
         f"/api/v1.0/precipitation<br/>"
         f"/api/v1.0/stations<br/>"
         f"/api/v1.0/tobs<br/>"
-        f"/api/v1.0/start<br/>"
-        f"/api/v1.0/start/end"
+        f"/api/v1.0/<br/>"
+        f"/api/v1.0/"
     )
 
 
@@ -99,7 +99,7 @@ def tobs():
 
     return jsonify(tobs_list)
 
-@app.route("/api/v1.0/start/<start>")
+@app.route("/api/v1.0/<start>")
 def start(start):
 
 #  check to see if the date format is correct before query
@@ -107,7 +107,7 @@ def start(start):
     try:
         start_date = dt.datetime.strptime(start,'%Y-%m-%d' )
     except ValueError:
-        message = {"error": f"enter a date with the format YY-MM-DD"}
+        message = {"error": f"enter a date with the format YYYY-MM-DD"}
         return jsonify(message), 404
 
     # Create our session (link) from Python to the DB
@@ -137,13 +137,13 @@ def start(start):
 
     return jsonify(message)
 
-@app.route("/api/v1.0/start/end/<start>/<end>")
+@app.route("/api/v1.0/<start>/<end>")
 def start_end(start,end):
     try:
         start_date = dt.datetime.strptime(start,'%Y-%m-%d' )
         end_date = dt.datetime.strptime(end,'%Y-%m-%d' )
     except ValueError:
-        message = {"error": f"enter a date with the format YY-MM-DD"}
+        message = {"error": f"enter a date with the format YYYY-MM-DD"}
         return jsonify(message), 404
 
     # Create our session (link) from Python to the DB
