@@ -1,9 +1,12 @@
 import numpy as np
 
+import datetime as dt
+from datetime import timedelta, datetime
+
 import sqlalchemy
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
-from sqlalchemy import create_engine, func
+from sqlalchemy import create_engine, func, distinct, text, desc
 
 from flask import Flask, jsonify
 
@@ -41,7 +44,7 @@ def welcome():
         f"/api/v1.0/stations<br/>"
         f"/api/v1.0/tobs<br/>"
         f"/api/v1.0/start<br/>"
-        f"/api/v1.0/start_end"
+        f"/api/v1.0/start/end"
     )
 
 
@@ -82,40 +85,94 @@ def tobs():
     # Create our session (link) from Python to the DB
     session = Session(engine)
 
-    """Return a list of passenger data including the name, age, and sex of each passenger"""
+    """determine the most active station within the past year and return the temperature values for it."""
     # Query all passengers
-    results = session.query(Passenger.name, Passenger.age, Passenger.sex).all()
+    date = session.query(Measurement.date).order_by(Measurement.date.desc()).first()
+    end_date = list(np.ravel(date))[0]
+    last_date = dt.datetime.strptime(end_date,'%Y-%m-%d' )
+    begin_date = last_date - timedelta(days=365)
+    station_ranking = session.query(Measurement.station, func.count(Measurement.date).label('station_count')).filter(Measurement.date >= begin_date).group_by(Measurement.station).order_by(desc('station_count')).all()
+    top_station = station_ranking[0][0]
+    tobs_query = session.query(Measurement.date,  Measurement.tobs).filter(Measurement.date >= begin_date).filter(Measurement.station == top_station).order_by(Measurement.date).all()
+    tobs_list = list(np.ravel(tobs_query))
+    session.close()
+
+    return jsonify(tobs_list)
+
+@app.route("/api/v1.0/start/<start>")
+def start(start):
+
+#  check to see if the date format is correct before query
+
+    try:
+        start_date = dt.datetime.strptime(start,'%Y-%m-%d' )
+    except ValueError:
+        message = {"error": f"enter a date with the format YY-MM-DD"}
+        return jsonify(message), 404
+
+    # Create our session (link) from Python to the DB
+    session = Session(engine)
+
+#run query on the date entered
+#determine last date of data
+
+    date = session.query(Measurement.date).order_by(Measurement.date.desc()).first()
+    end_date = dt.datetime.strptime(list(np.ravel(date))[0],'%Y-%m-%d' )
+
+#determine first date of data
+
+    date = session.query(Measurement.date).order_by(Measurement.date).first()
+    begin_date = dt.datetime.strptime(list(np.ravel(date))[0],'%Y-%m-%d' )
+
+#check if range is correct
+    if (start_date >= begin_date) & (start_date <= end_date):
+        temp_query = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs) ).filter(Measurement.date >= start_date).all()
+        temp_summary = list(np.ravel(temp_query))
+        message = temp_summary
+    else:
+        message = {"error": f"date {start} is not within the range of {begin_date} and {end_date}."}
+        return jsonify(message), 404
 
     session.close()
 
-    return jsonify(all_passengers)
+    return jsonify(message)
 
-# @app.route("/api/v1.0/start/<start>")
-# def start(start):
-#     # Create our session (link) from Python to the DB
-#     session = Session(engine)
+@app.route("/api/v1.0/start/end/<start>/<end>")
+def start_end(start,end):
+    try:
+        start_date = dt.datetime.strptime(start,'%Y-%m-%d' )
+        end_date = dt.datetime.strptime(end,'%Y-%m-%d' )
+    except ValueError:
+        message = {"error": f"enter a date with the format YY-MM-DD"}
+        return jsonify(message), 404
 
-#     """Return a list of passenger data including the name, age, and sex of each passenger"""
-#     # Query all passengers
-#     results = session.query(Passenger.name, Passenger.age, Passenger.sex).all()
+    # Create our session (link) from Python to the DB
+    session = Session(engine)
 
-#     session.close()
+    #run query on the date entered
+    #determine last date of data
 
-#     return jsonify(all_passengers)
+    date = session.query(Measurement.date).order_by(Measurement.date.desc()).first()
+    last_date = dt.datetime.strptime(list(np.ravel(date))[0],'%Y-%m-%d' )
 
-# @app.route("/api/v1.0/start_end/<start>/<end>")
-# def start_end(start/end):
-#     # Create our session (link) from Python to the DB
-#     session = Session(engine)
+    #determine first date of data
 
-#     """Return a list of passenger data including the name, age, and sex of each passenger"""
-#     # Query all passengers
-#     results = session.query(Passenger.name, Passenger.age, Passenger.sex).all()
+    date = session.query(Measurement.date).order_by(Measurement.date).first()
+    begin_date = dt.datetime.strptime(list(np.ravel(date))[0],'%Y-%m-%d' )
 
-#     session.close()
+    #check if range is correct
+    date_range_bool = (start_date >= begin_date) & (start_date <= last_date) & (end_date >= begin_date) & (end_date <= last_date)
+    if date_range_bool :
+        temp_query = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs) ).filter(Measurement.date >= start_date).filter(Measurement.date <= end_date).all()
+        temp_summary = list(np.ravel(temp_query))
+        message = temp_summary
+    else:
+        message = {"error": f"start date {start_date} or end date {end_date} is not within the range of {begin_date} and {end_date}."}
+        return jsonify(message), 404
 
-#     return jsonify(all_passengers)
+    session.close()
 
+    return jsonify(message)
 
 if __name__ == '__main__':
     app.run(debug=True)
